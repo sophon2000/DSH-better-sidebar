@@ -54,7 +54,8 @@ import {
  * Refusing here is what hands the address over: `canOpen` returning false
  * leaves the built-in `text` type (the `fallback` band) as the only claimant.
  *
- * The list is exactly the set the host renders — nothing more. Nine extensions
+ * The list covers the host's renderers, including Video Harness's four video
+ * formats in this maintained fork. Nine extensions
  * that the host has NO renderer for (`xlsb xlt xltx xltm ots dot dotx avif`)
  * used to be refused here too, and refusing them turned "the plugin shows a
  * download panel" into "the host shows 'preview is not available for this file
@@ -72,10 +73,18 @@ const HOST_OWNED_EXTS: ReadonlySet<string> = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico',
   // Office documents: the built-in converts them to PDF host-side.
   'doc', 'docx', 'ppt', 'pptx',
+  // The Video Harness host provides these video previews.
+  'mp4', 'm4v', 'mov', 'webm',
 ])
 
+/** The companion owns MP3/WAV only while its enabled viewer is registered. */
+const AUDIO_VIEWER_ID = 'dsh-audio-preview:audio'
+
+/** Formats with an existing Video Harness fallback when the companion is absent. */
+const FALLBACK_AUDIO_EXTS = /\.(?:mp3|wav)$/iu
+
 /**
- * Whether DSH's own preview owns one path.
+ * Whether the host's document or Video Harness preview owns one path.
  * @param path - the address's decoded path.
  * @returns true for a {@link HOST_OWNED_EXTS} extension (a dotfile is not one).
  */
@@ -368,9 +377,13 @@ export function registerNativeSurface(deps: NativeSurfaceDeps): () => void {
             patterns: ['dsh-resource://file/**'],
             canOpen: (address: string) => {
               const file = parseFileAddress(address)
-              // A non-file address, or one of the formats the built-in
-              // previews own, leaves the address to DSH's own `text` type.
-              return file !== undefined && !hostOwnedPath(file.path)
+              if (file === undefined || hostOwnedPath(file.path)) return false
+              // Resolve capabilities at click time: installing, disabling or
+              // unloading the companion must not depend on registration order.
+              if (FALLBACK_AUDIO_EXTS.test(file.path)) {
+                return service.matchFileViewer(file.path)?.id === AUDIO_VIEWER_ID
+              }
+              return true
             },
           }
           : {}),

@@ -755,6 +755,7 @@ describe('registerNativeSurface lifecycle (service-driven registration)', () => 
       'book.xlsx', 'legacy.xls', 'data.csv', 'data.tsv', 'flat.fods',
       'paper.pdf', 'photo.png', 'photo.jpg', 'anim.gif', 'photo.webp', 'art.svg',
       'tile.bmp', 'favicon.ico', 'report.docx', 'report.doc', 'deck.pptx', 'deck.ppt',
+      'clip.mp4', 'clip.M4V', 'clip.mov', 'clip.webm',
     ]) {
       expect(open(file(name)), name).toBe(false)
     }
@@ -773,6 +774,27 @@ describe('registerNativeSurface lifecycle (service-driven registration)', () => 
       expect(open(file(name)), name).toBe(true)
     }
     expect(open('sidebar://editor')).toBe(false)
+
+    // MP3/WAV already have a Video Harness fallback. The audio companion
+    // takes ownership only while its matching viewer is enabled and present.
+    const audio = ['voice.mp3', 'recording.WAV']
+    for (const name of audio) expect(open(file(name)), name).toBe(false)
+    const removeFallback = service.registerFileViewer({
+      id: 'code', title: 'Code', exts: [], priority: -100, fetchStrategy: 'fsRead', component: () => null,
+    })
+    for (const name of audio) expect(open(file(name)), name).toBe(false)
+    const removeAudio = service.registerFileViewer({
+      id: 'dsh-audio-preview:audio', title: 'Audio', exts: ['mp3', 'wav'],
+      priority: 50, fetchStrategy: 'custom', load: async () => undefined, component: () => null,
+    })
+    for (const name of audio) expect(open(file(name)), name).toBe(true)
+    store.setPrefs({ ...store.getPrefs(), viewersEnabled: { 'dsh-audio-preview:audio': false } })
+    for (const name of audio) expect(open(file(name)), name).toBe(false)
+    store.setPrefs({ ...store.getPrefs(), viewersEnabled: {} })
+    for (const name of audio) expect(open(file(name)), name).toBe(true)
+    removeAudio()
+    for (const name of audio) expect(open(file(name)), name).toBe(false)
+    removeFallback()
   })
 })
 

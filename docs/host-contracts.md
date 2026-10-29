@@ -6,6 +6,10 @@
 
 当前适配约束：HTTP/WS 均由 `ctx.connection.requestRejection(req)` 裁决 Host/Origin 与浏览器认证，只有 `undefined` 放行，不读取已删除的 `webRuntime`。alpha.5 同时移除了 `@deepseek-ai/dsh-invariants`、`ctx.invariants` 和上游 `/invariant` 子路径；本插件不再发布 invariant companion。
 
+Video Harness fork 的额外文件分流见 [adapter note](video-harness-adapter.md)：视频
+MP4/M4V/MOV/WebM 让给产品播放器，MP3/WAV 仅在音频扩展 viewer 已启用并匹配时接管。
+这属于本 fork 的宿主组合，以下上游文档预览格式边界仍保持。
+
 本次 RC 适配只更新版本与依赖声明，不改变上述行为。alpha.5 → rc.1 上游完整树差异共 355 项、全部为 `package.json`，源码零变化；本次验证见 [RC 适配记录](plans/2026-10-17-dsh-0.2.1-rc.1-adaptation.md)，不复用历史 alpha 测试数字。
 
 ## A. 0.1.5–0.1.7 引入、至今仍是现行约束的行为
