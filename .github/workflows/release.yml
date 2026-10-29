@@ -3,8 +3,8 @@ name: Release
 # Publishes `dsh-better-sidebar` to npm via npm Trusted Publishing (OIDC) —
 # no NPM_TOKEN secret required, provenance is attached to the tarball.
 #
-# Trigger: a GitHub Release is published (tag vX.Y.Z). The tag MUST match
-# package.json `version`; the workflow verifies this before publishing.
+# This maintained fork assembles fixed Host artifacts locally. Releases must
+# not schedule inherited npm automation; retain only the explicit manual lane.
 #
 # Dist-tag policy: a PRERELEASE version (e.g. v0.18.0-alpha.0 — the DSH
 # 0.1.2-alpha adapter track) publishes under the npm `alpha` dist-tag so the
@@ -23,8 +23,6 @@ name: Release
 # Canonical reference: https://docs.npmjs.com/trusted-publishers
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       dry_run:
