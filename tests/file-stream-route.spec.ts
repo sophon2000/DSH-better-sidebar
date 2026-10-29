@@ -160,11 +160,33 @@ describe('/sidebar/file streams without a size cap', () => {
     writeFileSync(target, '<svg xmlns="http://www.w3.org/2000/svg"></svg>')
     const { origin } = await serve(ws)
 
-    const response = await fetch(fileUrl(origin, ws, target))
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-security-policy')).toBe("sandbox; object-src 'none'")
-    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
-    expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+    for (const download of [false, true]) {
+      const response = await fetch(fileUrl(origin, ws, target, download ? { download: '1' } : {}))
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-security-policy')).toBe("sandbox; object-src 'none'")
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+      expect(await response.text()).toBe('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+    }
+  })
+
+  it.each(['page.html', 'page.htm', 'page.HTML', 'page.HTM'])('isolates scriptable %s on both inline and download URLs', async name => {
+    const ws = workspace('raw-html')
+    const target = join(ws, name)
+    const source = '<!doctype html><p>Local preview</p><script>window.rawHtmlExecuted = true</script>'
+    writeFileSync(target, source)
+    const { origin } = await serve(ws)
+    for (const download of [false, true]) {
+      const response = await fetch(fileUrl(origin, ws, target, download ? { download: '1' } : {}))
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toBe('text/html')
+      expect(response.headers.get('content-security-policy')).toBe("sandbox; object-src 'none'")
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+      expect(response.headers.get('content-disposition')).toBe(download
+        ? `attachment; filename*=UTF-8''${encodeURIComponent(name)}` : null)
+      expect(await response.text()).toBe(source)
+    }
   })
 
   it('answers the JSON error envelope when the file cannot be opened', async () => {

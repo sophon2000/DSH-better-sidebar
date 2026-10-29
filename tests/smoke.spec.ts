@@ -263,14 +263,37 @@ describe('host plugin smoke', () => {
     if (branch !== undefined) expect(branches.names).toContain(branch)
   })
 
-  it('enriches the log (full hash + refs) and renders commit diffs', async () => {
+  it('enriches the real repository log with full hashes and refs', async () => {
     const cwd = process.cwd()
     const log = await git.log(cwd)
     const first = log[0]!
     expect(first.hashFull).toMatch(/^[0-9a-f]{40}$/)
     expect(typeof first.refs).toBe('string')
-    const patch = await git.commitDiff(cwd, first.hashFull)
-    expect(patch).toContain('diff --git')
+  })
+
+  it('renders changed commit diffs and allows a legitimate empty commit', async () => {
+    // --all may put a tool's empty review snapshot first in the real repo.
+    // Patch contents belong to a deterministic fixture, not that ref order.
+    const cwd = mkdtempSync(join(tmpdir(), 'dsh-smoke-commit-diff-'))
+    const run = (...args: string[]) => gitRun(cwd, args).trim()
+    try {
+      run('init', '-q')
+      writeFileSync(join(cwd, 'tracked.txt'), 'first\n')
+      run('add', 'tracked.txt')
+      run('commit', '-qm', 'initial content')
+      writeFileSync(join(cwd, 'tracked.txt'), 'second\n')
+      run('commit', '-qam', 'change content')
+      const changed = run('rev-parse', 'HEAD')
+      const patch = await git.commitDiff(cwd, changed)
+      expect(patch).toContain('diff --git a/tracked.txt b/tracked.txt')
+      expect(patch).toContain('-first')
+      expect(patch).toContain('+second')
+      run('commit', '--allow-empty', '-qm', 'empty review snapshot')
+      const empty = run('rev-parse', 'HEAD')
+      expect(empty).not.toBe(changed)
+      expect(await git.commitDiff(cwd, empty)).toBe('')
+      expect((await git.log(cwd))[0]!.hashFull).toBe(empty)
+    } finally { removeTree(cwd) }
   })
 
   it('pages the log lazily with skip/count', async () => {
