@@ -308,7 +308,10 @@ function makeCssPlugin(pluginId: string): BuildPlugin {
           minify: true,
         })
         const classMap: Record<string, string> = {}
-        for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
+        // Lightning CSS exposes an unordered map. Use code-unit ordering,
+        // independent of the build machine's locale, for reproducible bytes.
+        const locals = Object.keys(cssExports ?? {}).sort()
+        for (const local of locals) classMap[local] = cssExports![local]!.name
         return [
           injectTag(pluginId, fileId, code.toString()),
           `export default ${JSON.stringify(classMap)};`,

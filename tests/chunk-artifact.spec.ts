@@ -34,6 +34,18 @@ if (!chunksBuilt) {
 }
 
 describe.skipIf(!chunksBuilt)('built chunk artifacts', () => {
+  it('serializes CSS Modules class maps in a stable, locale-independent order', () => {
+    for (const file of ['client.js', 'client-registry.js', 'client-editor.js', 'client-mermaid.js', 'client-terminal.js']) {
+      const source = readFileSync(`lib/${file}`, 'utf8')
+      const maps = Array.from(source.matchAll(/var \w+_module_css_default = (\{[\s\S]*?\});/g))
+      expect(maps.length, `${file} CSS Modules map coverage`).toBeGreaterThan(0)
+      for (const match of maps) {
+        const keys = Object.keys(JSON.parse(match[1]!) as Record<string, string>)
+        expect(keys, `${file} CSS Modules keys`).toEqual([...keys].sort())
+      }
+    }
+  })
+
   it('each chunk assigns its global registry slot when executed as a script', () => {
     g.window = g // classic-script globals
     // mermaid's core hooks window.addEventListener('load') at module scope

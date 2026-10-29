@@ -10,6 +10,8 @@ Video Harness SDK `0.2.1-rc.2.vh.11.local.20261026.1`; the source peer ranges
 continue to describe the upstream public API. Product artifact assembly pins
 the shipped peers to the exact Host and records its source and file digests.
 Do not install a second SDK or use a floating source dependency in the product.
+CSS Modules export keys are sorted by code unit before serialization because
+Lightning CSS's map order otherwise changes identical builds' bundle digests.
 
 The native file editor yields MP4/M4V/MOV/WebM to Video Harness. It claims
 MP3/WAV only while `matchFileViewer(path)` selects the enabled companion
