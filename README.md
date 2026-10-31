@@ -1,3 +1,5 @@
+> Video development candidate `0.28.2-vh.3` targets the fixed DSH `0.2.2-alpha.2.vh.1.local.20261031.1` family. Side chats use the native Agent model-selection API. This source update requires fresh build, package and isolated-profile verification before it replaces an accepted artifact.
+
 # dsh-better-sidebar
 
 <div align="center">

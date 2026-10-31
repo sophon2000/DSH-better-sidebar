@@ -7,7 +7,8 @@
  * (resumed) agents, cancel, dispose, and the transcript reads (seed cut,
  * afterSeq deltas, tail cap, live/persisted sources).
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { Context as CordisContext } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import { Session, SessionLogOffset, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
@@ -35,7 +36,7 @@ function agent(id: string, over: {
     clear: vi.fn(),
     remove: vi.fn((_id: string) => true),
   }
-  return {
+  const value = {
     id,
     status: 'idle' as const,
     options: {
@@ -44,8 +45,12 @@ function agent(id: string, over: {
       ...(over.reasoningEffort !== undefined ? { reasoningEffort: over.reasoningEffort } : {}),
     },
     // The agent-scoped context `installModelSelection` binds its prompt /
-    // request waterfalls to; the fake records the listeners' existence only.
+    // reminder waterfall to; the fake records the listeners' existence only.
     ctx: { on: vi.fn((_event: string, _listener: unknown) => () => {}) },
+    model: {
+      current: vi.fn(() => undefined),
+      select: vi.fn(),
+    },
     session: {
       id,
       header: { cwd: '/p', delegationDepth: 0, agentPreset: 'preset-a', ...over.header },
@@ -58,6 +63,8 @@ function agent(id: string, over: {
     cancel: vi.fn(),
     inbox,
   }
+  value.model.select.mockImplementation((selection: unknown) => { value.session.append('model/selection', selection) })
+  return value
 }
 
 type AgentLike = ReturnType<typeof agent>
@@ -65,14 +72,13 @@ type Handle = { agent: AgentLike; dispose: () => Promise<void> }
 
 /** The standard services the happy paths need. */
 function happyServices(parent: AgentLike | undefined, child: AgentLike) {
-  const create = vi.fn(async (_options: unknown): Promise<Handle> => ({
-    agent: child,
-    dispose: vi.fn(async () => {}),
-  }))
-  const resume = vi.fn(async (_options: unknown): Promise<Handle> => ({
-    agent: child,
-    dispose: vi.fn(async () => {}),
-  }))
+  const publish = async (options: unknown): Promise<Handle> => {
+    const { setup } = options as { setup?: (ctx: unknown, agent: unknown) => unknown }
+    await setup?.(child.ctx, child)
+    return { agent: child, dispose: vi.fn(async () => {}) }
+  }
+  const create = vi.fn(publish)
+  const resume = vi.fn(publish)
   const get = vi.fn((id: unknown) => (id === child.id ? child : parent))
   const rename = vi.fn((_session: unknown, _title: string) => ({ title: 'x', eventSeq: 1 }))
   const resolve = vi.fn(async (_id?: string) => ({ id: 'preset-a' }))
@@ -168,21 +174,22 @@ describe('sidechat.start', () => {
       apply(state: string | null, event: SessionEvent): string | null
     }
     let registered: DirectoryProjection | undefined
-    // Capture the REAL alpha.5 unit contributed by the host service. These
-    // context seams do not run system-prompt assembly, fs checks, or notices.
-    const workingDirectory = new WorkingDirectoryService({
-      reflect: { provide: () => {} },
-      sessionProjections: {
-        register: (definition: DirectoryProjection) => { registered = definition },
-        stateOf: (session: { header: { cwd?: string }; snapshotEvents(): SessionEvent[] }) => {
-          if (registered === undefined) throw new Error('working-directory unit not registered')
-          return session.snapshotEvents().reduce((cwd, event) => registered!.apply(cwd, event), registered.init(session.header))
-        },
+    // Mount the real service so its awaited projection handle is ready before reads.
+    const runtime = new CordisContext()
+    onTestFinished(() => runtime.fiber.dispose())
+    runtime.provide('fs', {})
+    runtime.provide('sessionProjections', {
+      register: async (definition: DirectoryProjection) => {
+        registered = definition
+        return {
+          stateOf: (session: { header: { cwd?: string }; snapshotEvents(): SessionEvent[] }) =>
+            session.snapshotEvents().reduce((cwd, event) => definition.apply(cwd, event), definition.init(session.header)),
+        }
       },
-      systemPrompt: { context: () => {}, getContextOrder: () => 0 },
-      on: () => {},
-      effect: () => {},
-    } as never, {})
+    })
+    runtime.provide('systemPrompt', { context: () => {}, getContextOrder: () => 0 })
+    await runtime.plugin(WorkingDirectoryService, {})
+    const workingDirectory = runtime.workingDirectory
     expect(workingDirectory.get(parent.session as never)).toBe(current)
     const services = happyServices(parent, agent('child'))
     await buildSidechatApi(ctxWith({ ...services, workingDirectory }))['sidechat.start']({ sessionId: 'parent' })
@@ -224,6 +231,7 @@ describe('sidechat.start', () => {
 
     expect(result.childId).toMatch(/^session-/)
     expect(services.create).toHaveBeenCalledTimes(1)
+    expect(child.ctx.on).toHaveBeenCalledWith('agent/pre-step', expect.any(Function), { prepend: true })
     const options = services.create.mock.calls[0]![0] as {
       sessionId: string
       meta: Record<string, unknown>
@@ -564,6 +572,7 @@ describe('sidechat.prompt', () => {
     const resumeOptions = services.resume.mock.calls[0]![0] as { resumeSessionId: string; setup: unknown }
     expect(resumeOptions.resumeSessionId).toBe('child')
     expect(typeof resumeOptions.setup).toBe('function')
+    expect(child.ctx.on).toHaveBeenCalledWith('agent/pre-step', expect.any(Function), { prepend: true })
     expect(services.open).toHaveBeenCalledWith('child', 'read')
     expect(child.followup).toHaveBeenCalledTimes(1)
   })
@@ -1004,7 +1013,7 @@ describe('sidechat.models and sidechat.model', () => {
     expect(result.failures).toEqual([{ id: 'host', message: 'boom' }])
   })
 
-  it('normalizes, logs and installs a selection for the live thread', async () => {
+  it('normalizes and selects a model through the live Agent', async () => {
     const child = agent('child-model', { events: threadLog() })
     const services = happyServices(undefined, child)
     const resolveCallConfig = vi.fn(async () => ({ provider: 'p2', model: 'm2', reasoningEffort: 'high' }))
@@ -1020,13 +1029,13 @@ describe('sidechat.models and sidechat.model', () => {
       model: 'm2',
       reasoningEffort: 'high',
     })
-    // The selection seam is installed ONCE per agent: the second switch of the
-    // same thread only mutates the ref.
-    const listeners = child.ctx.on.mock.calls.length
-    expect(listeners).toBeGreaterThan(0)
+    expect(child.model.select).toHaveBeenCalledWith({ provider: 'p2', model: 'm2', reasoningEffort: 'high' })
+    // The existing Agent's setup owns its listeners; switching adds no effects.
+    expect(child.ctx.on).not.toHaveBeenCalled()
     await api['sidechat.model']({ childId: 'child-model', provider: 'p2', model: 'm2' })
+    expect(child.model.select).toHaveBeenCalledTimes(2)
     expect(child.session.append).toHaveBeenCalledTimes(2)
-    expect(child.ctx.on.mock.calls.length).toBe(listeners)
+    expect(child.ctx.on).not.toHaveBeenCalled()
   })
 
   it('rejects an unavailable model with a bad-request', async () => {

@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { iconPaths } from './icon-artwork.ts'
 import { act } from 'react-dom/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import { api, type GitStatusResult, type SessionScope } from '../src/client/api.ts'
@@ -126,7 +127,7 @@ it('keeps directory/all actions inside their group, including Merge directory fo
       expect(action.querySelector('svg')!.getAttribute('height')).toBe('12')
       // Staging and unstaging must not share artwork: a staged row's action
       // unstages (the minus), every other row's stages (the host's Plus).
-      const glyphs = [...action.querySelectorAll('svg path')].map(path => path.getAttribute('d'))
+      const glyphs = iconPaths(action.querySelector('svg')!)
       const stagedRow = row.closest('[data-group]')!.getAttribute('data-group') === 'staged'
       expect(glyphs).toEqual(stagedRow ? ['M2 8H14'] : ['M8 2V14', 'M2 8H14'])
     }
@@ -134,7 +135,7 @@ it('keeps directory/all actions inside their group, including Merge directory fo
       const headerAction = group(name).firstElementChild!.querySelector<HTMLButtonElement>(`button[aria-label="${t(name === 'staged' ? 'unstageAll' : 'stageAll')}"]`)!
       expect(headerAction.querySelector('svg')!.getAttribute('width')).toBe('12')
       expect(headerAction.querySelector('svg')!.getAttribute('height')).toBe('12')
-      expect([...headerAction.querySelectorAll('svg path')].map(path => path.getAttribute('d')))
+      expect(iconPaths(headerAction.querySelector('svg')!))
         .toEqual(name === 'staged' ? ['M2 8H14'] : ['M8 2V14', 'M2 8H14'])
     }
     await click(dir('merge'))

@@ -5,7 +5,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const baseline = '0.2.1-rc.1'
+const baseline = '0.2.2-alpha.2'
+const developmentBaseline = '0.2.2-alpha.2.vh.1.local.20261031.1'
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const bash = readFileSync(new URL('../scripts/install.sh', import.meta.url), 'utf8')
 const powershell = readFileSync(new URL('../scripts/install.ps1', import.meta.url), 'utf8')
@@ -14,11 +15,11 @@ const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url),
 
 describe('DSH host baseline', () => {
   it('keeps all DSH package peers and dev pins on the exact baseline', () => {
-    for (const [section, prefix] of [['peerDependencies', '^'], ['devDependencies', '']] as const) {
+    for (const [section, expected] of [['peerDependencies', `^${baseline}`], ['devDependencies', developmentBaseline]] as const) {
       const entries = Object.entries(pkg[section]).filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
       expect(entries.length, section).toBeGreaterThan(0)
       for (const [name, version] of entries) {
-        expect(version, `${section}.${name}`).toBe(`${prefix}${baseline}`)
+        expect(version, `${section}.${name}`).toBe(expected)
       }
     }
   })

@@ -25,6 +25,7 @@ import type { Context } from '../src/context-types.ts'
 import type { SidebarTab } from '../src/client/state.ts'
 
 import { setupReactAct } from './test-utils.ts'
+import { iconArtwork } from './icon-artwork.ts'
 setupReactAct()
 
 const MAIN = 'C:/repo/main'
@@ -631,7 +632,7 @@ describe('ChangesTab', () => {
       const iconOf = (label: string): string => {
         const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
         expect(button, label).not.toBeNull()
-        return button!.querySelector('svg')!.innerHTML
+        return iconArtwork(button!.querySelector('svg')!)
       }
       // A stage affordance that drew the unstage glyph is the #941 regression:
       // the two directions must not share artwork (vscode: $(add) vs $(remove)).
