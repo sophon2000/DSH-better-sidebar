@@ -2,6 +2,22 @@
 
 > 本文档收录 dsh-better-sidebar 的完整发布历史（最新版摘要见 [README](README_ZH.md)；同步发布于 [GitHub Releases](https://github.com/omdsh-dev/DSH-better-sidebar/releases)）。
 
+### v0.28.2-vh.4
+
+- Combine the master Host/native model-selection adaptation with maintained
+  develop's raw HTML isolation and exact viewer-registration revocation.
+- Keep the reviewed security/lifecycle tests and manual-only fork release
+  workflow; preserve already published vh.2/vh.3 artifact bytes.
+
+### v0.28.2-vh.2
+
+- Isolate raw HTML responses with the existing scriptable-document sandbox;
+  retain scripted opaque-origin HTML previews, SVG images, and downloads.
+- Retire loaded or pending file viewers when their exact registration is
+  removed or disabled, including parked editors and content-sniffed viewers.
+  Unrelated registry changes preserve valid viewers and unsaved drafts.
+- Make commit-diff smoke coverage independent of empty tool review snapshots.
+
 ### v0.28.2-vh.1
 
 - Video Harness integration yields video file previews to the product and routes

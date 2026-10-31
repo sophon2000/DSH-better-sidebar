@@ -1,3 +1,5 @@
+> Video 开发候选 `0.28.2-vh.4` 将固定 DSH `0.2.2-alpha.2.vh.1.local.20261031.1` 宿主适配与维护 develop 线的原始 HTML 隔离、文件预览器撤销修复组合；侧边对话继续使用原生 Agent 模型选择 API。替换已接受制品前，必须重新构建、打包并完成独立 Profile 验证。
+
 # dsh-better-sidebar
 
 <div align="center">

@@ -136,6 +136,10 @@ export function EditorHost(props: {
   // the viewer loading flow (a directory is not a file).
   const isDir = metaOf(tab).dir === true
   const [load, setLoad] = useState<EditorLoad>({ status: 'loading' })
+  // Object identity distinguishes a revoked registration from its replacement,
+  // including viewers selected later by content sniffing rather than extension.
+  const selectedViewerRef = useRef<FileViewerDescriptor | undefined>(undefined)
+  const cancelViewerLoadRef = useRef<(() => void) | undefined>(undefined)
   // Manual refresh (issue #167): bumping the sequence re-runs the load effect
   // with the same path/scope — the only reload entry besides open/close.
   const [reloadSeq, setReloadSeq] = useState(0)
@@ -339,6 +343,31 @@ export function EditorHost(props: {
     controlsRef.current = controls
   }, [])
 
+  // Independent of the load effect: rename retargets keep the document alive
+  // without loading again, but its plugin can still be disabled or unloaded.
+  useEffect(() => {
+    if (service === undefined) return
+    const retireRevokedViewer = (): void => {
+      const viewer = selectedViewerRef.current
+      if (viewer === undefined) return
+      if (service.getFileViewers().includes(viewer) && service.isViewerEnabled(viewer.id)) return
+      selectedViewerRef.current = undefined
+      cancelViewerLoadRef.current?.()
+      cancelViewerLoadRef.current = undefined
+      controlsRef.current = null
+      setToolbar(null)
+      setLoad({ status: 'loading' })
+      setReloadSeq(sequence => sequence + 1)
+    }
+    const unsubscribeRegistry = service.subscribe(retireRevokedViewer)
+    const unsubscribePrefs = store.subscribe(retireRevokedViewer)
+    retireRevokedViewer()
+    return () => {
+      unsubscribePrefs()
+      unsubscribeRegistry()
+    }
+  }, [service, store])
+
   // Publish this tab's unsaved-draft state to the close/unload guards: the
   // toolbar report already carries `dirty`, so no extra plumbing is needed.
   // A path-less window (the files home) and folder windows never register.
@@ -421,6 +450,7 @@ export function EditorHost(props: {
     loadedPathRef.current = path
     if (pathChanged && consumeRetargetedPath(retargetKey, previousPath, path)) return
     if (!pathChanged) clearRetargetedPath(retargetKey)
+    selectedViewerRef.current = undefined
     // A (re)load or a path-less tab clears any hoisted toolbar state — the
     // fresh viewer re-registers its own.
     setToolbar(null)
@@ -432,10 +462,16 @@ export function EditorHost(props: {
     // Aborts the matched viewer's `load` when the editor tears down (tab
     // closed, path changed, session switched) or re-matches the viewer.
     const controller = new AbortController()
+    const cancelLoad = (): void => {
+      cancelled = true
+      controller.abort()
+    }
+    cancelViewerLoadRef.current = cancelLoad
     setLoad({ status: 'loading' })
     const mediaUrlOf = (): string => mediaUrl(scope, path)
     const apply = (action: EditorLoadAction): void => {
       if (cancelled) return
+      selectedViewerRef.current = action.kind === 'binary' ? undefined : action.viewer
       switch (action.kind) {
         case 'binary':
           setLoad({ status: 'binary' })
@@ -468,8 +504,10 @@ export function EditorHost(props: {
             const outcome = planFsReadOutcome(action.viewer, result, (head) => ctx.get('betterSidebar')?.matchFileViewer(path, head), mediaUrlOf)
             // Carry the read's mtime into the rendered viewer: the text
             // editor uses it as the save baseline (fs-conflict on drift).
-            if (outcome.kind === 'render') setLoad({ ...outcome, status: 'ready', mtimeMs: result.mtimeMs })
-            else apply(outcome)
+            if (outcome.kind === 'render') {
+              selectedViewerRef.current = outcome.viewer
+              setLoad({ ...outcome, status: 'ready', mtimeMs: result.mtimeMs })
+            } else apply(outcome)
           }).catch((error: unknown) => {
             if (cancelled) return
             setLoad({ status: 'error', message: error instanceof Error ? error.message : String(error) })
@@ -478,7 +516,10 @@ export function EditorHost(props: {
       }
     }
     apply(planFirstMatch(ctx.get('betterSidebar')?.matchFileViewer(path), mediaUrlOf))
-    return () => { cancelled = true; controller.abort() }
+    return () => {
+      cancelLoad()
+      if (cancelViewerLoadRef.current === cancelLoad) cancelViewerLoadRef.current = undefined
+    }
     // Granular deps: only these two fields gate the (re)fetch (see
     // session-scope.ts for why the object itself is no longer a signal).
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,4 +1,4 @@
-> Video development candidate `0.28.2-vh.3` targets the fixed DSH `0.2.2-alpha.2.vh.1.local.20261031.1` family. Side chats use the native Agent model-selection API. This source update requires fresh build, package and isolated-profile verification before it replaces an accepted artifact.
+> Video development candidate `0.28.2-vh.4` combines the fixed DSH `0.2.2-alpha.2.vh.1.local.20261031.1` Host adaptation with the maintained develop line's raw-HTML isolation and file-viewer revocation fixes. Side chats retain the native Agent model-selection API. Fresh build, package and isolated-profile verification are required before these new bytes replace an accepted artifact.
 
 # dsh-better-sidebar
 
